@@ -1,0 +1,7 @@
+{
+  "name": "WhatsApp Bridge Pro",
+  "description": "A high-performance WhatsApp integration platform featuring QR-based login, multi-instance management, and a secure API key system for third-party messaging.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
