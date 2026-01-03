@@ -438,13 +438,8 @@ const PORT = process.env.PORT || 3000;
 const distPath = path.join(__dirname, 'dist');
 if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
-    // SPA routing fallback
-    app.get('*', (req, res) => {
-        // Don't redirect API calls
-        if (req.path.startsWith('/api') || req.path.startsWith('/instances') || 
-            req.path.startsWith('/send') || req.path.startsWith('/health')) {
-            return res.status(404).json({ error: 'Not found' });
-        }
+    // SPA routing fallback using regex instead of '*'
+    app.get(/^\/(?!api|instances|send|health|\.js|\.css|\.html|\.json).*$/, (req, res) => {
         res.sendFile(path.join(distPath, 'index.html'));
     });
 }
