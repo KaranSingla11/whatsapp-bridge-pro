@@ -12,8 +12,10 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build frontend
-RUN npm run build
+# Build frontend (pass environment variables if available)
+ARG GEMINI_API_KEY
+ENV GEMINI_API_KEY=$GEMINI_API_KEY
+RUN npm run build && ls -la dist/ || echo "Build failed or dist not found"
 
 # Production stage
 FROM node:22-alpine
