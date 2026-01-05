@@ -180,6 +180,12 @@
       return;
     }
 
+    // Validate phone number
+    if (phone.replace(/\D/g, '').length < 10) {
+      alert('Please enter a valid phone number');
+      return;
+    }
+
     // Add message to UI
     const msgDiv = document.createElement('div');
     msgDiv.style.cssText = `
@@ -202,7 +208,10 @@
     sendBtn.style.opacity = '0.6';
 
     try {
-      // Send to backend
+      // Send to backend with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
       const response = await fetch(`${apiBaseUrl}/api/v1/messages/send`, {
         method: 'POST',
         headers: {
@@ -214,11 +223,15 @@
           to: phone,
           message: message,
           type: 'web_bridge'
-        })
+        }),
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 
       const data = await response.json();
@@ -230,7 +243,7 @@
     } catch (error) {
       console.error('Send error:', error);
       msgDiv.style.background = '#dc2626';
-      msgDiv.textContent = 'Failed: ' + message;
+      msgDiv.innerHTML = `<strong>Failed:</strong> ${error.message || 'Unable to send message'}<br><small>${message}</small>`;
     } finally {
       sendBtn.disabled = false;
       sendBtn.style.opacity = '1';

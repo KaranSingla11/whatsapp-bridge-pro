@@ -474,14 +474,31 @@ app.post('/api/v1/messages/send', async (req, res) => {
 
     if (type === 'web_bridge') {
         const session = sessions.get(instanceId);
-        if (!session || session.status !== 'connected') return res.status(400).json({ error: 'Bridge instance not connected' });
+        if (!session) return res.status(400).json({ error: 'Instance not found' });
+        if (session.status !== 'connected') return res.status(400).json({ error: 'Bridge instance not connected. Status: ' + session.status });
         
         try {
-            const jid = `${to.replace(/\D/g, '')}@s.whatsapp.net`;
-            await session.sock.sendMessage(jid, { text: message });
+            // Validate phone number
+            const cleanNumber = to.replace(/\D/g, '');
+            if (cleanNumber.length < 10) {
+                return res.status(400).json({ error: 'Invalid phone number' });
+            }
+
+            const jid = `${cleanNumber}@s.whatsapp.net`;
+            
+            // Send message with timeout
+            const sendPromise = session.sock.sendMessage(jid, { text: message });
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Message send timeout')), 10000)
+            );
+
+            await Promise.race([sendPromise, timeoutPromise]);
+            
             logMessage(instanceId, 'sent', to, message);
-            return res.json({ success: true, method: 'bridge' });
+            return res.json({ success: true, method: 'bridge', message: 'Message sent successfully' });
         } catch (err) {
+            console.error('Message send error:', err.message);
+            // Don't crash, just report error
             return res.status(500).json({ error: 'Bridge sending failed', details: err.message });
         }
     } else if (type === 'cloud_api') {
@@ -636,4 +653,22 @@ if (fs.existsSync(distPath)) {
     });
 }
 
-app.listen(PORT, () => console.log(`🚀 BridgePro Backend: http://localhost:${PORT}`));
+const server = app.listen(PORT, () => {
+    console.log(`🚀 BridgePro Backend: http://localhost:${PORT}`);
+    console.log(`✅ Server listening on port ${PORT}`);
+});
+
+// Graceful error handling
+server.on('error', (err) => {
+    console.error('❌ Server error:', err);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('❌ Uncaught Exception:', error);
+    process.exit(1);
+});
