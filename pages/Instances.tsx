@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Plus, Smartphone, RefreshCw, Trash2, X, 
   CheckCircle2, Terminal, Server, ChevronRight, Clock,
@@ -32,6 +32,9 @@ const Instances: React.FC<InstancesProps> = ({ instances, setInstances }) => {
   const [isLiveConnection, setIsLiveConnection] = useState(false);
   const [configType, setConfigType] = useState<InstanceType>('web_bridge');
   const [scanStep, setScanStep] = useState(0);
+  
+  // Use ref to prevent multiple simultaneous create requests
+  const isCreatingRef = useRef(false);
 
   // Fetch instances from backend on mount and periodically
   useEffect(() => {
@@ -109,7 +112,12 @@ const Instances: React.FC<InstancesProps> = ({ instances, setInstances }) => {
       setError('Instance name is required');
       return;
     }
+    // Prevent duplicate calls using ref
+    if (isCreatingRef.current) {
+      return;
+    }
     try {
+      isCreatingRef.current = true;
       setError(null);
       // Create instance via backend
       const response = await fetch(`${API_BASE}/instances`, {
@@ -132,6 +140,8 @@ const Instances: React.FC<InstancesProps> = ({ instances, setInstances }) => {
       }
     } catch (err) {
       setError('Connection failed. Check your backend.');
+    } finally {
+      isCreatingRef.current = false;
     }
   }, [instanceName, configType, setInstances, isSimulated]);
 
@@ -190,8 +200,13 @@ const Instances: React.FC<InstancesProps> = ({ instances, setInstances }) => {
 
   useEffect(() => {
     let timer: number;
+    let hasCalledFetch = false;
+    
     if (isConfiguring && scanStep === 1 && configType === 'web_bridge') {
-      fetchQrCode();
+      if (!hasCalledFetch) {
+        fetchQrCode();
+        hasCalledFetch = true;
+      }
       timer = window.setInterval(() => {
         setCountdown(prev => {
           if (prev <= 1) {
@@ -203,7 +218,7 @@ const Instances: React.FC<InstancesProps> = ({ instances, setInstances }) => {
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [isConfiguring, scanStep, configType, fetchQrCode]);
+  }, [isConfiguring, scanStep, configType]);
 
   const handleAddInstance = () => {
     const newInstance: WhatsAppInstance = {
@@ -236,10 +251,27 @@ const Instances: React.FC<InstancesProps> = ({ instances, setInstances }) => {
     return false;
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (instanceToDelete) {
-      setInstances(prev => prev.filter(i => i.id !== instanceToDelete.id));
-      setInstanceToDelete(null);
+      try {
+        // Call backend API to delete the instance
+        const response = await fetch(`${API_BASE}/instances/${instanceToDelete.id}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          // Remove from frontend state
+          setInstances(prev => prev.filter(i => i.id !== instanceToDelete.id));
+          setInstanceToDelete(null);
+          alert('Instance deleted successfully');
+        } else {
+          const errorData = await response.json();
+          alert(`Failed to delete instance: ${errorData.error || response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Error deleting instance:', error);
+        alert('Error deleting instance: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      }
     }
   };
 

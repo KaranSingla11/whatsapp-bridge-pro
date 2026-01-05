@@ -12,14 +12,17 @@ import {
   ShieldCheck,
   Menu,
   X,
-  User
+  User,
+  Zap
 } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Instances from './pages/Instances';
 import ApiKeys from './pages/ApiKeys';
 import Chat from './pages/Chat';
+import AutoReply from './pages/AutoReply';
 import SettingsPage from './pages/Settings';
 import ProfilePage from './pages/Profile';
+import Login from './pages/Login';
 import { WhatsAppInstance, ApiKey } from './types';
 
 /**
@@ -29,21 +32,12 @@ import { WhatsAppInstance, ApiKey } from './types';
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+
   // App-wide state - In true Next.js, this might use a Context Provider or State Store
-  const [instances, setInstances] = useState<WhatsAppInstance[]>([
-    {
-      id: 'inst_1',
-      name: 'Primary Support',
-      type: 'web_bridge',
-      phoneNumber: '+1 (555) 0123',
-      status: 'connected',
-      createdAt: '2023-10-01',
-      lastActive: new Date().toISOString(),
-      messagesSent: 1240,
-      config: { backendUrl: 'http://localhost:3000' }
-    }
-  ]);
+  const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
 
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([
     {
@@ -57,11 +51,67 @@ const App: React.FC = () => {
     }
   ]);
 
+  // Check if user is already logged in on mount
+  useEffect(() => {
+    const authToken = localStorage.getItem('authToken');
+    const email = localStorage.getItem('userEmail');
+    if (authToken && email) {
+      setIsAuthenticated(true);
+      setUserEmail(email);
+      // Fetch instances from backend
+      fetchInstances();
+    }
+    setIsLoading(false);
+  }, []);
+
+  // Fetch instances from backend
+  const fetchInstances = async () => {
+    try {
+      const res = await fetch('http://localhost:3000/instances');
+      if (res.ok) {
+        const data = await res.json();
+        setInstances(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch instances:', err);
+    }
+  };
+
   // Handle route changes
   useEffect(() => {
     setIsSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
+
+  const handleLoginSuccess = (email: string) => {
+    setUserEmail(email);
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userEmail');
+    setIsAuthenticated(false);
+    setUserEmail('');
+    setActiveTab('dashboard');
+  };
+
+  // Show loading state while checking auth
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-green-200 border-t-green-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600 font-semibold">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
 
   // Page Routing Logic
   const renderPage = () => {
@@ -70,7 +120,8 @@ const App: React.FC = () => {
       case 'instances': return <Instances instances={instances} setInstances={setInstances} />;
       case 'apikeys': return <ApiKeys apiKeys={apiKeys} setApiKeys={setApiKeys} />;
       case 'chat': return <Chat instances={instances.filter(i => i.status === 'connected')} />;
-      case 'profile': return <ProfilePage />;
+      case 'autoreply': return <AutoReply />;
+      case 'profile': return <ProfilePage userEmail={userEmail} onLogout={handleLogout} />;
       case 'settings': return <SettingsPage />;
       default: return <Dashboard instances={instances} apiKeys={apiKeys} />;
     }
@@ -110,6 +161,7 @@ const App: React.FC = () => {
           <NavItem icon={<LayoutDashboard size={18} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
           <NavItem icon={<Smartphone size={18} />} label="Instances" active={activeTab === 'instances'} onClick={() => setActiveTab('instances')} />
           <NavItem icon={<MessageSquare size={18} />} label="Live Chat" active={activeTab === 'chat'} onClick={() => setActiveTab('chat')} />
+          <NavItem icon={<Zap size={18} />} label="Auto Reply" active={activeTab === 'autoreply'} onClick={() => setActiveTab('autoreply')} />
           <NavItem icon={<Key size={18} />} label="API Keys" active={activeTab === 'apikeys'} onClick={() => setActiveTab('apikeys')} />
           <NavItem icon={<User size={18} />} label="My Profile" active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
           <NavItem icon={<Settings size={18} />} label="Platform Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
@@ -124,9 +176,12 @@ const App: React.FC = () => {
             </div>
             <ShieldCheck size={18} className="text-[#25D366] relative z-10" />
           </div>
-          <button className="w-full flex items-center justify-center space-x-3 px-4 py-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all duration-300 font-bold text-sm">
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center space-x-3 px-4 py-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all duration-300 font-bold text-sm"
+          >
             <LogOut size={18} />
-            <span>Terminate Session</span>
+            <span>Logout</span>
           </button>
         </div>
       </aside>
@@ -159,11 +214,11 @@ const App: React.FC = () => {
               onClick={() => setActiveTab('profile')}
             >
               <div className="text-right hidden xl:block leading-tight">
-                <p className="text-sm font-black text-slate-900">Felix Admin</p>
+                <p className="text-sm font-black text-slate-900">{userEmail.split('@')[0]}</p>
                 <p className="text-[10px] text-[#25D366] font-black uppercase tracking-tighter">Root Level</p>
               </div>
               <img 
-                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" 
+                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userEmail}`}
                 alt="Admin" 
                 className="w-10 h-10 rounded-[1.1rem] shadow-lg border-2 border-slate-100 group-hover:border-[#25D366] transition-all" 
               />

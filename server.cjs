@@ -16,12 +16,12 @@ const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
 
+// Import auto-reply manager
+const autoReplyManager = require('./auto-reply-manager.cjs');
+
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
-
-// Serve static frontend files
-app.use(express.static(path.join(__dirname, 'dist')));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -212,6 +212,27 @@ async function createWhatsAppSession(sessionId) {
             const content = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "Media Message";
             const from = msg.key.remoteJid;
             logMessage(sessionId, 'received', from, content);
+
+            // Check for auto-reply rules
+            try {
+                const rules = autoReplyManager.getByInstance(sessionId);
+                for (const rule of rules) {
+                    // Check if from number matches (if specified)
+                    if (rule.fromNumber && !from.includes(rule.fromNumber)) {
+                        continue;
+                    }
+
+                    // Check if message matches trigger
+                    if (autoReplyManager.checkMatch(rule, content)) {
+                        // Send auto-reply
+                        await sock.sendMessage(from, { text: rule.replyMessage });
+                        console.log(`✅ Auto-reply sent to ${from}`);
+                        break; // Only send one auto-reply per message
+                    }
+                }
+            } catch (err) {
+                console.error('Error processing auto-reply:', err);
+            }
         }
     });
 
@@ -258,6 +279,57 @@ app.post('/instances', async (req, res) => {
     await new Promise(r => setTimeout(r, 1500));
     const session = sessions.get(id);
     res.json({ id, status: session?.status, qr: session?.qr });
+});
+
+// Delete instance endpoint
+app.delete('/instances/:id', async (req, res) => {
+    const { id } = req.params;
+    
+    try {
+        // Remove from instances map
+        instances.delete(id);
+        
+        // Save instances to file
+        saveInstances();
+        
+        // Close WhatsApp session if exists
+        const sock = sessions.get(id);
+        if (sock && sock.ws) {
+            try {
+                await sock.ws.close();
+            } catch (e) {
+                console.error(`Error closing socket for ${id}:`, e.message);
+            }
+        }
+        sessions.delete(id);
+        
+        // Clean up message logs
+        messageLogs.delete(id);
+        
+        // Clean up SSE clients
+        const clients = sseClients.get(id);
+        if (clients) {
+            clients.forEach(client => {
+                try { client.end(); } catch (e) {}
+            });
+        }
+        sseClients.delete(id);
+        
+        // Clean up auto-reply rules for this instance
+        try {
+            const rules = autoReplyManager.getByInstance(id);
+            for (const rule of rules) {
+                autoReplyManager.deleteRule(rule.id);
+            }
+        } catch (e) {
+            console.error(`Error cleaning up auto-replies for ${id}:`, e.message);
+        }
+        
+        res.json({ success: true, message: `Instance ${id} deleted` });
+    } catch (error) {
+        console.error(`Error deleting instance ${id}:`, error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.get('/instances/:id/qr', async (req, res) => {
@@ -432,15 +504,64 @@ app.post('/debug/instances/:id/messages', (req, res) => {
     res.json({ ok: true });
 });
 
+// ============ AUTO-REPLY ENDPOINTS ============
+
+// Get all auto-reply rules
+app.get('/auto-reply', (req, res) => {
+    const rules = autoReplyManager.getAll();
+    res.json({ rules });
+});
+
+// Create new auto-reply rule
+app.post('/auto-reply', (req, res) => {
+    try {
+        const rule = autoReplyManager.addRule(req.body);
+        res.json({ success: true, rule });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// Update auto-reply rule
+app.put('/auto-reply/:id', (req, res) => {
+    try {
+        const rule = autoReplyManager.updateRule(req.params.id, req.body);
+        if (!rule) return res.status(404).json({ error: 'Rule not found' });
+        res.json({ success: true, rule });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// Delete auto-reply rule
+app.delete('/auto-reply/:id', (req, res) => {
+    try {
+        autoReplyManager.deleteRule(req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 
 // Serve frontend SPA with fallback to index.html
 const distPath = path.join(__dirname, 'dist');
 if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath));
-    // SPA routing fallback using regex instead of '*'
-    app.get(/^\/(?!api|instances|send|health|\.js|\.css|\.html|\.json).*$/, (req, res) => {
-        res.sendFile(path.join(distPath, 'index.html'));
+    // Serve static assets (CSS, JS, images, etc) - but NOT index.html for all routes
+    app.use('/assets', express.static(path.join(distPath, 'assets')));
+    app.use('/favicon', express.static(path.join(distPath, 'favicon')));
+    
+    // Serve specific static files
+    app.get(/\.(js|css|json|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)$/, (req, res) => {
+        res.sendFile(path.join(distPath, req.path));
+    });
+    
+    // SPA fallback: serve index.html for all non-API routes
+    app.get(/^\/(?!api|instances|send|health|auto-reply|debug).*$/, (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'), (err) => {
+            if (err) res.status(404).send('Not found');
+        });
     });
 }
 

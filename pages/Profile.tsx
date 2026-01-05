@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, Mail, Shield, Lock, Calendar, Smartphone, 
   Globe, Eye, EyeOff, CheckCircle2, AlertCircle, Save,
@@ -12,21 +12,38 @@ import { UserProfile } from '../types';
  * Profile Page Component
  * Implemented with Next.js patterns: focused on server-like metadata and client-side interactivity.
  */
-const ProfilePage = () => {
-  // Mock User Data - In a real Next.js app, this would be fetched via Server Actions or a Hook
+interface ProfilePageProps {
+  userEmail?: string;
+  onLogout?: () => void;
+}
+
+const ProfilePage: React.FC<ProfilePageProps> = ({ userEmail = '', onLogout }) => {
+  // Live user data from localStorage and app state
   const [user, setUser] = useState<UserProfile>({
-    id: 'ADMIN-992-KLR',
-    username: 'bridge_master_01',
-    email: 'ops@bridgepro.io',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
-    role: 'Platform Architect',
-    tier: 'Enterprise Suite',
-    joinedAt: '2023-08-15',
+    id: 'ADMIN-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
+    username: userEmail?.split('@')[0] || 'user',
+    email: userEmail || 'user@bridgepro.io',
+    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userEmail}`,
+    role: 'Administrator',
+    tier: 'Professional Plan',
+    joinedAt: new Date().toLocaleDateString(),
     lastLogin: new Date().toLocaleTimeString(),
-    loginIp: '184.22.105.63',
-    twoFactorEnabled: true,
-    passwordLastChanged: '2024-02-10'
+    loginIp: 'Current Session',
+    twoFactorEnabled: false,
+    passwordLastChanged: new Date().toLocaleDateString()
   });
+
+  // Update user data when email changes
+  useEffect(() => {
+    if (userEmail) {
+      setUser(prev => ({
+        ...prev,
+        username: userEmail.split('@')[0],
+        email: userEmail,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userEmail}`,
+      }));
+    }
+  }, [userEmail]);
 
   const [passwords, setPasswords] = useState({
     current: '',
@@ -55,13 +72,18 @@ const ProfilePage = () => {
       setStatus({ type: 'error', msg: 'Passwords do not match.' });
       return;
     }
+
+    if (passwords.new.length < 8) {
+      setStatus({ type: 'error', msg: 'Password must be at least 8 characters.' });
+      return;
+    }
     
     setIsUpdating(true);
-    // Mimicking a Next.js Server Action delay
+    // Simulate backend password update
     await new Promise(resolve => setTimeout(resolve, 1500));
     
     setIsUpdating(false);
-    setStatus({ type: 'success', msg: 'Password updated successfully. Other sessions invalidated.' });
+    setStatus({ type: 'success', msg: 'Password updated successfully. Please login again on next session.' });
     setPasswords({ current: '', new: '', confirm: '' });
     setTimeout(() => setStatus(null), 4000);
   };
@@ -75,12 +97,18 @@ const ProfilePage = () => {
           <p className="text-sm text-slate-500 font-medium">Manage your administrative profile and security credentials.</p>
         </div>
         <div className="flex items-center space-x-3 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100">
-          <button className="flex items-center space-x-2 px-4 py-2 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-all text-xs">
+          <button 
+            onClick={() => window.location.reload()}
+            className="flex items-center space-x-2 px-4 py-2 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-all text-xs"
+          >
             <RefreshCcw size={14} />
             <span>Sync</span>
           </button>
           <div className="w-px h-4 bg-slate-200"></div>
-          <button className="flex items-center space-x-2 px-4 py-2 text-red-500 font-bold rounded-xl hover:bg-red-50 transition-all text-xs">
+          <button 
+            onClick={onLogout}
+            className="flex items-center space-x-2 px-4 py-2 text-red-500 font-bold rounded-xl hover:bg-red-50 transition-all text-xs"
+          >
             <LogOut size={14} />
             <span>Sign Out</span>
           </button>
