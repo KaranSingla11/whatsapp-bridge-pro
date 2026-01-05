@@ -428,12 +428,16 @@ app.get('/embed/chat-widget.js', (req, res) => {
     const instanceId = req.query.instanceId;
     const apiUrl = req.query.apiUrl || 'http://localhost:3000';
 
+    console.log(`📲 Chat widget request: apiKey=${apiKey?.slice(0,10)}..., instance=${instanceId}`);
+
     if (!apiKey || !instanceId) {
+        console.warn('❌ Chat widget: Missing apiKey or instanceId');
         return res.status(400).json({ error: 'Missing apiKey or instanceId' });
     }
 
     // Validate API key
     if (!apiKeys.has(apiKey)) {
+        console.warn(`❌ Chat widget: Invalid API key`);
         return res.status(401).json({ error: 'Invalid API key' });
     }
 
@@ -449,13 +453,18 @@ app.get('/embed/chat-widget.js', (req, res) => {
 
     const instanceExists = instances.some(i => i.id === instanceId);
     if (!instanceExists) {
+        console.warn(`❌ Chat widget: Instance not found ${instanceId}`);
         return res.status(404).json({ error: 'Instance not found' });
     }
 
-    // Serve the chat widget script
-    res.setHeader('Content-Type', 'application/javascript');
+    console.log(`✅ Chat widget: Serving for instance ${instanceId}`);
+
+    // Serve the chat widget script with proper CORS
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     // Read the chat widget file or use inline version
     let widgetCode;

@@ -5,49 +5,70 @@
  */
 
 (function() {
-  // Get parameters from script tag
-  const scripts = document.getElementsByTagName('script');
-  const currentScript = scripts[scripts.length - 1];
-  const params = new URL(currentScript.src).searchParams;
-  
-  const apiKey = params.get('apiKey');
-  const instanceId = params.get('instanceId');
-  const apiBaseUrl = params.get('apiUrl') || 'http://localhost:3000';
+  try {
+    console.log('🔄 WhatsApp Chat Widget initializing...');
+    
+    // Get parameters from script tag
+    const scripts = document.getElementsByTagName('script');
+    const currentScript = scripts[scripts.length - 1];
+    
+    console.log('📝 Script src:', currentScript.src);
+    
+    const params = new URL(currentScript.src).searchParams;
+    
+    const apiKey = params.get('apiKey');
+    const instanceId = params.get('instanceId');
+    const apiBaseUrl = params.get('apiUrl') || 'http://localhost:3000';
 
-  if (!apiKey || !instanceId) {
-    console.error('WhatsApp Chat Widget: Missing apiKey or instanceId');
-    return;
-  }
+    console.log('🔑 API Key:', apiKey ? 'Present' : 'Missing');
+    console.log('📱 Instance ID:', instanceId ? instanceId : 'Missing');
+    console.log('🌐 API Base URL:', apiBaseUrl);
 
-  // Create widget container
-  const widgetContainer = document.createElement('div');
-  widgetContainer.id = 'whatsapp-chat-widget';
-  widgetContainer.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 380px;
-    height: 500px;
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 5px 40px rgba(0,0,0,0.16);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    z-index: 999999;
-    display: none;
-    flex-direction: column;
-    overflow: hidden;
-  `;
+    if (!apiKey || !instanceId) {
+      console.error('❌ WhatsApp Chat Widget: Missing apiKey or instanceId');
+      return;
+    }
 
-  // Create button (bubble)
-  const button = document.createElement('button');
-  button.id = 'whatsapp-chat-button';
-  button.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
+    // Wait for DOM to be ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initWidget);
+    } else {
+      initWidget();
+    }
+
+    function initWidget() {
+      try {
+        console.log('✅ Starting widget initialization...');
+        
+        // Create widget container
+        const widgetContainer = document.createElement('div');
+        widgetContainer.id = 'whatsapp-chat-widget';
+        widgetContainer.style.cssText = `
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          width: 380px;
+          height: 500px;
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 5px 40px rgba(0,0,0,0.16);
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          z-index: 999999;
+          display: none;
+          flex-direction: column;
+          overflow: hidden;
+        `;
+
+        // Create button (bubble)
+        const button = document.createElement('button');
+        button.id = 'whatsapp-chat-button';
+        button.style.cssText = `
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
     background: linear-gradient(135deg, #25D366 0%, #20BA5A 100%);
     border: none;
     cursor: pointer;
@@ -256,26 +277,33 @@
 
   // Assemble widget
   widgetContainer.appendChild(header);
-  widgetContainer.appendChild(messagesArea);
-  widgetContainer.appendChild(inputArea);
+        widgetContainer.appendChild(messagesArea);
+        widgetContainer.appendChild(inputArea);
 
-  // Add to page
-  document.body.appendChild(widgetContainer);
-  document.body.appendChild(button);
+        // Add to page
+        document.body.appendChild(widgetContainer);
+        document.body.appendChild(button);
 
-  // Add initial message
-  const welcomeMsg = document.createElement('div');
-  welcomeMsg.style.cssText = `
-    background: white;
-    padding: 12px;
-    border-radius: 12px;
-    margin: 8px 0;
-    font-size: 13px;
-    color: #333;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  `;
-  welcomeMsg.textContent = 'Hi! 👋 Feel free to reach out anytime. We\'re here to help!';
-  messagesArea.appendChild(welcomeMsg);
+        // Add initial message
+        const welcomeMsg = document.createElement('div');
+        welcomeMsg.style.cssText = `
+          background: white;
+          padding: 12px;
+          border-radius: 12px;
+          margin: 8px 0;
+          font-size: 13px;
+          color: #333;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        `;
+        welcomeMsg.textContent = 'Hi! 👋 Feel free to reach out anytime. We\'re here to help!';
+        messagesArea.appendChild(welcomeMsg);
 
-  console.log('WhatsApp Chat Widget loaded successfully');
+        console.log('✅ WhatsApp Chat Widget loaded successfully');
+      } catch (err) {
+        console.error('❌ Error initializing widget:', err);
+      }
+    }
+  } catch (err) {
+    console.error('❌ Fatal error in WhatsApp Chat Widget:', err);
+  }
 })();
