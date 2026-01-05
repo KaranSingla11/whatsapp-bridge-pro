@@ -34,6 +34,9 @@ RUN mkdir -p ./sessions
 # Copy built frontend from builder
 COPY --from=builder /app/dist ./dist
 
+# Copy public folder with chat widget
+COPY ./public ./public
+
 # Copy server and manager files
 COPY server.cjs .
 COPY auto-reply-manager.cjs .
