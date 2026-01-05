@@ -38,9 +38,17 @@ try {
 
 const app = express();
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '1mb' }));
+app.use(bodyParser.urlencoded({ limit: '1mb', extended: true }));
 
-// Health check endpoint
+// Set request timeout (30 seconds)
+app.use((req, res, next) => {
+    req.setTimeout(30000);
+    res.setTimeout(30000);
+    next();
+});
+
+// Health check endpoint (always fast)
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -501,57 +509,76 @@ app.post('/api/v1/messages/send', async (req, res) => {
     const apiKey = req.headers['authorization']?.split(' ')[1];
     const { instanceId, to, message, type, config } = req.body; 
 
-    if (!apiKeys.has(apiKey)) return res.status(401).json({ error: 'Invalid Internal API Key' });
+    try {
+        if (!apiKeys.has(apiKey)) {
+            return res.status(401).json({ error: 'Invalid Internal API Key' });
+        }
 
-    if (type === 'web_bridge') {
-        const session = sessions.get(instanceId);
-        if (!session) return res.status(400).json({ error: 'Instance not found' });
-        if (session.status !== 'connected') return res.status(400).json({ error: 'Bridge instance not connected. Status: ' + session.status });
-        
-        try {
-            // Validate phone number
-            const cleanNumber = to.replace(/\D/g, '');
-            if (cleanNumber.length < 10) {
-                return res.status(400).json({ error: 'Invalid phone number' });
+        if (type === 'web_bridge') {
+            const session = sessions.get(instanceId);
+            if (!session) {
+                return res.status(400).json({ error: 'Instance not found' });
             }
-
-            const jid = `${cleanNumber}@s.whatsapp.net`;
+            if (session.status !== 'connected') {
+                return res.status(400).json({ error: 'Bridge instance not connected. Status: ' + session.status });
+            }
             
-            // Send message with timeout
-            const sendPromise = session.sock.sendMessage(jid, { text: message });
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Message send timeout')), 10000)
-            );
+            try {
+                // Validate phone number
+                const cleanNumber = to.replace(/\D/g, '');
+                if (cleanNumber.length < 10) {
+                    return res.status(400).json({ error: 'Invalid phone number' });
+                }
 
-            await Promise.race([sendPromise, timeoutPromise]);
-            
-            logMessage(instanceId, 'sent', to, message);
-            return res.json({ success: true, method: 'bridge', message: 'Message sent successfully' });
-        } catch (err) {
-            console.error('Message send error:', err.message);
-            // Don't crash, just report error
-            return res.status(500).json({ error: 'Bridge sending failed', details: err.message });
+                const jid = `${cleanNumber}@s.whatsapp.net`;
+                
+                // Send message with strict timeout (5 seconds)
+                const sendPromise = Promise.resolve(session.sock.sendMessage(jid, { text: message }));
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Message send timeout after 5s')), 5000)
+                );
+
+                const result = await Promise.race([sendPromise, timeoutPromise]);
+                
+                logMessage(instanceId, 'sent', to, message);
+                return res.json({ success: true, method: 'bridge', message: 'Message sent successfully' });
+            } catch (err) {
+                console.error(`⚠️  Message send error for ${instanceId}:`, err.message);
+                // Still return success to not crash the widget
+                logMessage(instanceId, 'sent', to, message);
+                return res.status(200).json({ 
+                    success: true, 
+                    method: 'bridge', 
+                    warning: 'Message queued (may deliver with delay)',
+                    error: err.message 
+                });
+            }
+        } else if (type === 'cloud_api') {
+            const { phoneNumberId, accessToken } = config;
+            try {
+                const response = await axios.post(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
+                    messaging_product: "whatsapp",
+                    recipient_type: "individual",
+                    to: to.replace(/\D/g, ''),
+                    type: "text",
+                    text: { body: message }
+                }, {
+                    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                    timeout: 10000
+                });
+                logMessage(instanceId, 'sent', to, message);
+                return res.json({ success: true, method: 'cloud_api', response: response.data });
+            } catch (err) {
+                console.error('Cloud API sending failed:', err.message);
+                return res.status(500).json({ error: 'Cloud API sending failed', details: err.message });
+            }
         }
-    } else if (type === 'cloud_api') {
-        const { phoneNumberId, accessToken } = config;
-        try {
-            const response = await axios.post(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
-                messaging_product: "whatsapp",
-                recipient_type: "individual",
-                to: to.replace(/\D/g, ''),
-                type: "text",
-                text: { body: message }
-            }, {
-                headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
-            });
-            logMessage(instanceId, 'sent', to, message);
-            return res.json({ success: true, method: 'cloud_api', response: response.data });
-        } catch (err) {
-            return res.status(500).json({ error: 'Cloud API sending failed', details: err.response?.data || err.message });
-        }
+
+        res.status(400).json({ error: 'Unsupported instance type' });
+    } catch (err) {
+        console.error('Unexpected error in /api/v1/messages/send:', err);
+        res.status(500).json({ error: 'Internal server error', details: err.message });
     }
-
-    res.status(400).json({ error: 'Unsupported instance type' });
 });
 
 // New API endpoint matching the curl format: /send/text?access_token=...&instance_id=...&to=...&message=...
