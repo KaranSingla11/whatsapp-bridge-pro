@@ -198,12 +198,24 @@ async function createWhatsAppSession(sessionId) {
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: true,
-        browser: ["BridgePro", "Chrome", "1.0.0"]
+        printQRInTerminal: false, // Disable to prevent terminal issues
+        browser: ["BridgePro", "Chrome", "1.0.0"],
+        // Improve stability
+        connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: 0,
+        keepAliveIntervalMs: 30000,
+        emitOwnEvents: false,
+        logger: require("pino")({ level: "silent" }) // Silent logger to reduce overhead
     });
 
     sessions.set(sessionId, { sock, status: 'connecting', qr: null, type: 'web_bridge' });
     updateInstanceStatus(sessionId, 'connecting');
+
+    // Add error handler to prevent crashes
+    sock.ev.on('connection.error', (err) => {
+        console.error(`Connection error for ${sessionId}:`, err?.message);
+        // Don't crash - let the connection.update handle reconnection
+    });
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
@@ -211,45 +223,55 @@ async function createWhatsAppSession(sessionId) {
 
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) createWhatsAppSession(sessionId);
-            else {
+            if (shouldReconnect) {
+                console.log(`Attempting to reconnect ${sessionId}...`);
+                setTimeout(() => createWhatsAppSession(sessionId), 3000); // Retry after 3s
+            } else {
                 updateInstanceStatus(sessionId, 'disconnected');
                 sessions.delete(sessionId);
             }
         } else if (connection === 'open') {
-            sessions.get(sessionId).status = 'connected';
-            sessions.get(sessionId).qr = null;
-            updateInstanceStatus(sessionId, 'connected');
+            const session = sessions.get(sessionId);
+            if (session) {
+                session.status = 'connected';
+                session.qr = null;
+                updateInstanceStatus(sessionId, 'connected');
+            }
         }
     });
 
     sock.ev.on('messages.upsert', async m => {
-        const msg = m.messages[0];
-        if (!msg.key.fromMe && m.type === 'notify') {
-            const content = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "Media Message";
-            const from = msg.key.remoteJid;
-            logMessage(sessionId, 'received', from, content);
+        try {
+            const msg = m.messages[0];
+            if (!msg.key.fromMe && m.type === 'notify') {
+                const content = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "Media Message";
+                const from = msg.key.remoteJid;
+                logMessage(sessionId, 'received', from, content);
 
-            // Check for auto-reply rules
-            try {
-                const rules = autoReplyManager.getByInstance(sessionId);
-                for (const rule of rules) {
-                    // Check if from number matches (if specified)
-                    if (rule.fromNumber && !from.includes(rule.fromNumber)) {
-                        continue;
-                    }
+                // Check for auto-reply rules
+                try {
+                    const rules = autoReplyManager.getByInstance(sessionId);
+                    for (const rule of rules) {
+                        // Check if from number matches (if specified)
+                        if (rule.fromNumber && !from.includes(rule.fromNumber)) {
+                            continue;
+                        }
 
-                    // Check if message matches trigger
-                    if (autoReplyManager.checkMatch(rule, content)) {
-                        // Send auto-reply
-                        await sock.sendMessage(from, { text: rule.replyMessage });
-                        console.log(`✅ Auto-reply sent to ${from}`);
-                        break; // Only send one auto-reply per message
+                        // Check if message matches trigger
+                        if (autoReplyManager.checkMatch(rule, content)) {
+                            // Send auto-reply
+                            await sock.sendMessage(from, { text: rule.replyMessage });
+                            console.log(`✅ Auto-reply sent to ${from}`);
+                            break; // Only send one auto-reply per message
+                        }
                     }
+                } catch (err) {
+                    console.error('Error processing auto-reply:', err);
                 }
-            } catch (err) {
-                console.error('Error processing auto-reply:', err);
             }
+        } catch (err) {
+            console.error('Error in messages.upsert handler:', err?.message);
+            // Don't crash - continue processing
         }
     });
 
