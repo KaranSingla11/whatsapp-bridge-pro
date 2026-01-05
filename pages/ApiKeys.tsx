@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Key, Plus, Copy, Trash2, Shield, Eye, EyeOff, Check, Terminal } from 'lucide-react';
+import { Key, Plus, Copy, Trash2, Shield, Eye, EyeOff, Check, Terminal, MessageCircle, Code } from 'lucide-react';
 import { ApiKey } from '../types';
 import { API_BASE } from '../config';
 
@@ -13,6 +13,8 @@ const ApiKeys: React.FC<ApiKeysProps> = ({ apiKeys, setApiKeys }) => {
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showEmbedCode, setShowEmbedCode] = useState<string | null>(null);
+  const [selectedInstance, setSelectedInstance] = useState<string>('');
 
   const toggleShow = (id: string) => {
     setShowKey(prev => ({ ...prev, [id]: !prev[id] }));
@@ -121,6 +123,115 @@ const ApiKeys: React.FC<ApiKeysProps> = ({ apiKeys, setApiKeys }) => {
         ))}
       </div>
 
+      {/* Chat Widget Embed Section */}
+      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl lg:rounded-[2.5rem] p-6 lg:p-8 border border-green-200 shadow-sm">
+        <div className="flex items-start space-x-4 mb-6">
+          <div className="p-3 bg-green-100 text-green-600 rounded-xl shrink-0">
+            <MessageCircle size={24} />
+          </div>
+          <div>
+            <h3 className="text-lg lg:text-xl font-black text-slate-900">WhatsApp Chat Widget</h3>
+            <p className="text-sm text-slate-600 font-medium mt-1">Embed a chatbot on your website - Similar to Tawk.to</p>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-2">Select API Key</label>
+              <select 
+                value={showEmbedCode || ''}
+                onChange={(e) => {
+                  setShowEmbedCode(e.target.value);
+                  setSelectedInstance('');
+                }}
+                className="w-full px-4 py-2.5 border border-green-200 rounded-xl font-semibold text-sm focus:ring-4 focus:ring-green-200 outline-none"
+              >
+                <option value="">Choose an API Key...</option>
+                {apiKeys.map(key => (
+                  <option key={key.id} value={key.key}>{key.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-2">Instance ID</label>
+              <input 
+                type="text"
+                placeholder="e.g., inst_abc123def456"
+                value={selectedInstance}
+                onChange={(e) => setSelectedInstance(e.target.value)}
+                className="w-full px-4 py-2.5 border border-green-200 rounded-xl font-semibold text-sm focus:ring-4 focus:ring-green-200 outline-none"
+              />
+            </div>
+          </div>
+
+          {showEmbedCode && selectedInstance && (
+            <div className="space-y-4 p-6 bg-white rounded-2xl border border-green-100">
+              <div className="flex items-center space-x-2 mb-4">
+                <Code size={18} className="text-green-600" />
+                <h4 className="font-bold text-slate-900">Embed Code</h4>
+              </div>
+
+              <p className="text-xs text-slate-600 font-medium mb-3">Copy this code to your website's &lt;body&gt; tag:</p>
+
+              <div className="bg-slate-900 rounded-xl p-4 overflow-x-auto">
+                <pre className="font-mono text-[10px] lg:text-xs text-emerald-300 whitespace-pre-wrap break-words">
+<code>{`<!-- Start of WhatsApp Chat Widget -->
+<script type="text/javascript">
+(function() {
+  var script = document.createElement('script');
+  script.src = '${API_BASE}/embed/chat-widget.js?apiKey=${showEmbedCode}&instanceId=${selectedInstance}&apiUrl=${API_BASE}';
+  script.async = true;
+  script.charset = 'UTF-8';
+  script.setAttribute('crossorigin', '*');
+  document.body.appendChild(script);
+})();
+</script>
+<!-- End of WhatsApp Chat Widget -->`}</code>
+                </pre>
+              </div>
+
+              <button 
+                onClick={() => {
+                  const code = `<!-- Start of WhatsApp Chat Widget -->
+<script type="text/javascript">
+(function() {
+  var script = document.createElement('script');
+  script.src = '${API_BASE}/embed/chat-widget.js?apiKey=${showEmbedCode}&instanceId=${selectedInstance}&apiUrl=${API_BASE}';
+  script.async = true;
+  script.charset = 'UTF-8';
+  script.setAttribute('crossorigin', '*');
+  document.body.appendChild(script);
+})();
+</script>
+<!-- End of WhatsApp Chat Widget -->`;
+                  navigator.clipboard.writeText(code);
+                  setCopied('widget-' + showEmbedCode);
+                  setTimeout(() => setCopied(null), 2000);
+                }}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold flex items-center justify-center space-x-2 transition-all"
+              >
+                {copied === 'widget-' + showEmbedCode ? (
+                  <><Check size={18} /> <span>Copied!</span></>
+                ) : (
+                  <><Copy size={18} /> <span>Copy Embed Code</span></>
+                )}
+              </button>
+
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-xs text-blue-800 space-y-2">
+                <p className="font-bold">✨ How it works:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>This creates a floating WhatsApp chat bubble on your website</li>
+                  <li>Visitors can send messages that appear in your WhatsApp instance</li>
+                  <li>Messages are sent to the selected WhatsApp instance</li>
+                  <li>Works on any website - paste the code before closing &lt;/body&gt; tag</li>
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Integration Docs Preview */}
       <div className="bg-slate-900 rounded-2xl lg:rounded-[2.5rem] p-6 lg:p-8 text-white overflow-hidden shadow-2xl relative space-y-6">
         <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 blur-3xl pointer-events-none"></div>
@@ -213,6 +324,99 @@ const ApiKeys: React.FC<ApiKeysProps> = ({ apiKeys, setApiKeys }) => {
     "type": "web_bridge"
   }'`}</code>
             </pre>
+          </div>
+        </div>
+
+        <hr className="border-white/10" />
+
+        {/* Chat Widget Embed Section in Docs */}
+        <div className="relative">
+          <div className="flex items-center space-x-3 mb-6">
+            <MessageCircle size={22} className="text-emerald-400" />
+            <div>
+              <h3 className="text-lg lg:text-xl font-bold">Chat Widget Embed Script</h3>
+              <p className="text-xs text-slate-400 font-medium">Add a WhatsApp chatbot to any website (like Tawk.to)</p>
+            </div>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+              <p className="text-xs font-mono text-emerald-300 mb-2">GET /embed/chat-widget.js</p>
+              <p className="text-sm text-slate-400 font-medium">Embed a floating WhatsApp chat bubble on any website</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-slate-300 uppercase mb-2">Parameters:</p>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-start space-x-3 text-slate-400">
+                  <span className="text-emerald-400 font-bold min-w-[120px]">apiKey</span>
+                  <span>Your API key for authentication (required)</span>
+                </div>
+                <div className="flex items-start space-x-3 text-slate-400">
+                  <span className="text-emerald-400 font-bold min-w-[120px]">instanceId</span>
+                  <span>WhatsApp instance ID where messages will be sent (required)</span>
+                </div>
+                <div className="flex items-start space-x-3 text-slate-400">
+                  <span className="text-emerald-400 font-bold min-w-[120px]">apiUrl</span>
+                  <span className="text-slate-500">(Optional) Your API server URL, defaults to http://localhost:3000</span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs font-bold text-slate-300 uppercase mb-2">Basic Installation:</p>
+            <div className="bg-black/40 p-4 lg:p-6 rounded-xl border border-white/5 overflow-x-auto">
+              <pre className="font-mono text-[9px] lg:text-xs text-emerald-300 leading-relaxed whitespace-pre-wrap break-all">
+<code>{`<!-- Add this code before closing </body> tag -->
+<script src="${API_BASE}/embed/chat-widget.js?apiKey=YOUR_API_KEY&instanceId=YOUR_INSTANCE_ID&apiUrl=${API_BASE}"></script>`}</code>
+              </pre>
+            </div>
+
+            <p className="text-xs font-bold text-slate-300 uppercase mb-2">Dynamic Installation (Recommended):</p>
+            <div className="bg-black/40 p-4 lg:p-6 rounded-xl border border-white/5 overflow-x-auto">
+              <pre className="font-mono text-[9px] lg:text-xs text-emerald-300 leading-relaxed">
+<code>{`<!-- Add this code before closing </body> tag -->
+<script type="text/javascript">
+(function() {
+  var script = document.createElement('script');
+  script.src = '${API_BASE}/embed/chat-widget.js?apiKey=YOUR_API_KEY&instanceId=YOUR_INSTANCE_ID';
+  script.async = true;
+  script.charset = 'UTF-8';
+  script.setAttribute('crossorigin', '*');
+  document.body.appendChild(script);
+})();
+</script>`}</code>
+              </pre>
+            </div>
+
+            <p className="text-xs font-bold text-slate-300 uppercase mb-2">HTML Integration Example:</p>
+            <div className="bg-black/40 p-4 lg:p-6 rounded-xl border border-white/5 overflow-x-auto">
+              <pre className="font-mono text-[9px] lg:text-xs text-blue-300 leading-relaxed">
+<code>{`<!DOCTYPE html>
+<html>
+<head>
+  <title>My Website</title>
+</head>
+<body>
+  <!-- Your website content here -->
+  
+  <!-- WhatsApp Chat Widget -->
+  <script src="${API_BASE}/embed/chat-widget.js?apiKey=wa_live_xxxxx&instanceId=inst_123abc"></script>
+</body>
+</html>`}</code>
+              </pre>
+            </div>
+
+            <div className="bg-emerald-900/30 p-4 rounded-xl border border-emerald-500/20 text-xs text-emerald-200 space-y-2">
+              <p className="font-bold">✨ Features:</p>
+              <ul className="list-disc list-inside space-y-1 text-slate-300">
+                <li>Floating green WhatsApp chat bubble</li>
+                <li>One-click to open/close conversation</li>
+                <li>Visitor enters phone number & types message</li>
+                <li>Messages sent directly to your WhatsApp instance</li>
+                <li>Mobile responsive design</li>
+                <li>Works on any website - no dependencies</li>
+              </ul>
+            </div>
           </div>
         </div>
 

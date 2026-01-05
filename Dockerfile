@@ -34,10 +34,14 @@ RUN mkdir -p ./sessions
 # Copy built frontend from builder
 COPY --from=builder /app/dist ./dist
 
-# Copy server and other files
+# Copy server and manager files
 COPY server.cjs .
-COPY api_keys.json .
-COPY instances.json .
+COPY auto-reply-manager.cjs .
+
+# Copy data files if they exist (create empty ones if missing)
+RUN echo '[]' > api_keys.json || true
+RUN echo '[]' > instances.json || true
+RUN echo '[]' > auto_replies.json || true
 
 # Expose port
 EXPOSE 3000

@@ -16,8 +16,25 @@ const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
 
-// Import auto-reply manager
-const autoReplyManager = require('./auto-reply-manager.cjs');
+// Import auto-reply manager (with fallback if missing)
+let autoReplyManager;
+try {
+  autoReplyManager = require('./auto-reply-manager.cjs');
+} catch (err) {
+  console.warn('Warning: auto-reply-manager.cjs not found, creating minimal version...');
+  // Fallback implementation
+  autoReplyManager = {
+    rules: [],
+    load: () => {},
+    save: () => {},
+    addRule: (rule) => { rule.id = 'ar_' + Date.now(); return rule; },
+    updateRule: (id, updates) => null,
+    deleteRule: (id) => true,
+    getByInstance: (instanceId) => [],
+    getAll: () => [],
+    checkMatch: (rule, message) => false
+  };
+}
 
 const app = express();
 app.use(cors());
@@ -381,6 +398,54 @@ app.get('/instances/:id/messages/stream', (req, res) => {
         clearInterval(ping);
         clients.delete(res);
     });
+});
+
+// Chat Widget Embed Script 
+app.get('/embed/chat-widget.js', (req, res) => {
+    const apiKey = req.query.apiKey;
+    const instanceId = req.query.instanceId;
+    const apiUrl = req.query.apiUrl || 'http://localhost:3000';
+
+    if (!apiKey || !instanceId) {
+        return res.status(400).json({ error: 'Missing apiKey or instanceId' });
+    }
+
+    // Validate API key
+    if (!apiKeys.has(apiKey)) {
+        return res.status(401).json({ error: 'Invalid API key' });
+    }
+
+    // Verify instance exists
+    let instances = [];
+    try {
+        if (fs.existsSync('./instances.json')) {
+            instances = JSON.parse(fs.readFileSync('./instances.json', 'utf8'));
+        }
+    } catch (e) {
+        console.error('Error loading instances:', e.message);
+    }
+
+    const instanceExists = instances.some(i => i.id === instanceId);
+    if (!instanceExists) {
+        return res.status(404).json({ error: 'Instance not found' });
+    }
+
+    // Serve the chat widget script
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    // Read the chat widget file
+    const widgetPath = path.join(__dirname, 'public', 'chat-widget.js');
+    let widgetCode = fs.readFileSync(widgetPath, 'utf8');
+
+    // Inject parameters into the script
+    widgetCode = widgetCode.replace(
+        `const apiBaseUrl = params.get('apiUrl') || 'http://localhost:3000';`,
+        `const apiBaseUrl = '${apiUrl}';`
+    );
+
+    res.send(widgetCode);
 });
 
 app.post('/instances/cloud/verify', async (req, res) => {
