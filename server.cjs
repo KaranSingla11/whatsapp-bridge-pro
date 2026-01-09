@@ -53,6 +53,30 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Keep-alive endpoint for external pings
+app.get('/keepalive', (req, res) => {
+    res.json({ 
+        status: 'active', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        activeInstances: sessions.size,
+        activeApiKeys: apiKeys.size
+    });
+});
+
+// Status endpoint for monitoring
+app.get('/status', (req, res) => {
+    res.json({
+        server: 'WhatsApp Bridge Pro',
+        status: 'running',
+        uptime: process.uptime(),
+        activeInstances: sessions.size,
+        totalApiKeys: apiKeys.size,
+        memoryUsage: process.memoryUsage(),
+        timestamp: new Date().toISOString()
+    });
+});
+
 const SESSIONS_DIR = './sessions';
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR);
 
@@ -708,6 +732,35 @@ app.delete('/auto-reply/:id', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
+// Automatic keep-alive system to prevent Render sleep
+function startKeepAlive() {
+    // Self-ping every 5 minutes
+    setInterval(async () => {
+        try {
+            const response = await fetch(`http://localhost:${PORT}/keepalive`);
+            const data = await response.json();
+            console.log(`🔄 Keep-alive ping: ${data.status} | Uptime: ${Math.floor(data.uptime / 60)}m`);
+        } catch (err) {
+            console.error('❌ Keep-alive failed:', err.message);
+        }
+    }, 5 * 60 * 1000); // Every 5 minutes
+
+    // External ping every 10 minutes (backup)
+    setInterval(async () => {
+        try {
+            if (process.env.RENDER_EXTERNAL_URL) {
+                const response = await fetch(`${process.env.RENDER_EXTERNAL_URL}/keepalive`);
+                console.log(`🌐 External ping successful`);
+            }
+        } catch (err) {
+            console.log('⚠️ External ping failed (expected during deployment)');
+        }
+    }, 10 * 60 * 1000); // Every 10 minutes
+}
+
+// Start keep-alive after server is ready
+setTimeout(startKeepAlive, 5000);
 
 // Serve frontend SPA with fallback to index.html
 const distPath = path.join(__dirname, 'dist');

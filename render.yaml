@@ -1,0 +1,31 @@
+services:
+  # WhatsApp Bridge Pro - Background Worker (Always On)
+  type: worker
+  name: whatsapp-bridge-pro
+  env: node
+  plan: free
+  buildCommand: "npm run build"
+  startCommand: "npm start"
+  healthCheckPath: "/health"
+  envVars:
+    - key: NODE_ENV
+      value: production
+    - key: PORT
+      value: 3000
+    - key: RENDER_EXTERNAL_URL
+      sync: false
+
+  # Auto-scaling configuration
+  autoDeploy: true
+  zeroDowntime: true
+  
+  # Resource limits (free tier)
+  resource:
+    cpu: 0.25
+    memory: 512MB
+
+  # Persistence
+  disk:
+    name: whatsapp-data
+    mountPath: /app/data
+    sizeGB: 1

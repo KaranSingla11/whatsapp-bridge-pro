@@ -49,9 +49,9 @@ RUN echo '[]' > auto_replies.json || true
 # Expose port
 EXPOSE 3000
 
-# Health check - very lenient to allow Baileys operations
-HEALTHCHECK --interval=60s --timeout=30s --start-period=120s --retries=3 \
-  CMD timeout 25 node -e "require('http').get('http://localhost:3000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)}).on('error', (e) => {throw e})" || exit 0
+# Health check - optimized for Background Worker
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
 # Start the server
 CMD ["npm", "start"]
