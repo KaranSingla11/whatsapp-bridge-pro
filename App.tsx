@@ -39,17 +39,7 @@ const App: React.FC = () => {
   // App-wide state - In true Next.js, this might use a Context Provider or State Store
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
 
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([
-    {
-      id: 'key_1',
-      name: 'Main Website API',
-      key: 'wa_live_7890_abc123',
-      createdAt: '2023-10-05',
-      lastUsed: '2023-10-27',
-      status: 'active',
-      requestCount: 5420
-    }
-  ]);
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
 
   // Check if user is already logged in on mount
   useEffect(() => {
@@ -60,6 +50,8 @@ const App: React.FC = () => {
       setUserEmail(email);
       // Fetch instances from backend
       fetchInstances();
+      // Fetch API keys from backend
+      fetchApiKeys();
     }
     setIsLoading(false);
   }, []);
@@ -77,6 +69,43 @@ const App: React.FC = () => {
     }
   };
 
+  // Fetch API keys from backend
+  const fetchApiKeys = async () => {
+    try {
+      // First try to load from localStorage as backup
+      const storedKeys = localStorage.getItem('apiKeys');
+      if (storedKeys) {
+        try {
+          const parsedKeys = JSON.parse(storedKeys);
+          setApiKeys(parsedKeys);
+        } catch (e) {
+          console.error('Error parsing stored API keys:', e);
+        }
+      }
+
+      // Then fetch from backend
+      const res = await fetch('http://localhost:3000/api/keys');
+      if (res.ok) {
+        const data = await res.json();
+        const backendKeys = data.keys.map((key: string, index: number) => ({
+          id: `key_${key.replace(/[^a-zA-Z0-9]/g, '_')}`, // Use the actual key to create a stable ID
+          name: `Integration Key ${index + 1}`,
+          key: key,
+          createdAt: new Date().toISOString().split('T')[0],
+          lastUsed: null,
+          status: 'active' as const,
+          requestCount: 0
+        }));
+        setApiKeys(backendKeys);
+        // Save to localStorage as backup
+        localStorage.setItem('apiKeys', JSON.stringify(backendKeys));
+      }
+    } catch (err) {
+      console.error('Failed to fetch API keys:', err);
+      // If backend fetch fails, keep using localStorage data if available
+    }
+  };
+
   // Handle route changes
   useEffect(() => {
     setIsSidebarOpen(false);
@@ -86,6 +115,14 @@ const App: React.FC = () => {
   const handleLoginSuccess = (email: string) => {
     setUserEmail(email);
     setIsAuthenticated(true);
+    // Fetch API keys after successful login
+    fetchApiKeys();
+  };
+
+  // Function to update API keys and persist to localStorage
+  const updateApiKeys = (newKeys: ApiKey[]) => {
+    setApiKeys(newKeys);
+    localStorage.setItem('apiKeys', JSON.stringify(newKeys));
   };
 
   const handleLogout = () => {
@@ -118,7 +155,7 @@ const App: React.FC = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard instances={instances} apiKeys={apiKeys} />;
       case 'instances': return <Instances instances={instances} setInstances={setInstances} />;
-      case 'apikeys': return <ApiKeys apiKeys={apiKeys} setApiKeys={setApiKeys} />;
+      case 'apikeys': return <ApiKeys apiKeys={apiKeys} setApiKeys={updateApiKeys} />;
       case 'chat': return <Chat instances={instances.filter(i => i.status === 'connected')} />;
       case 'autoreply': return <AutoReply />;
       case 'profile': return <ProfilePage userEmail={userEmail} onLogout={handleLogout} />;

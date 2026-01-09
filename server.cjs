@@ -316,6 +316,24 @@ app.post('/api/keys/generate', async (req, res) => {
     });
 });
 
+// API Keys endpoint - delete a key
+app.delete('/api/keys/:key', (req, res) => {
+    const { key } = req.params;
+    
+    console.log(`DELETE request for API key: ${key}`);
+    console.log(`Current API keys: ${Array.from(apiKeys).join(', ')}`);
+    
+    if (apiKeys.has(key)) {
+        apiKeys.delete(key);
+        saveApiKeys();
+        console.log(`API key ${key} deleted successfully`);
+        res.json({ success: true, message: 'API key deleted successfully' });
+    } else {
+        console.log(`API key ${key} not found`);
+        res.status(404).json({ error: 'API key not found' });
+    }
+});
+
 // Create a new instance and start session
 app.post('/instances', async (req, res) => {
     const { name, type = 'web_bridge' } = req.body;

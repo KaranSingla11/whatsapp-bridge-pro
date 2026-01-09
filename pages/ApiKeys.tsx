@@ -38,7 +38,7 @@ const ApiKeys: React.FC<ApiKeysProps> = ({ apiKeys, setApiKeys }) => {
       if (res.ok) {
         const data = await res.json();
         const newKey: ApiKey = {
-          id: `key_${Date.now()}`,
+          id: `key_${data.key.replace(/[^a-zA-Z0-9]/g, '_')}`, // Use the actual key to create a stable ID
           name: 'Integration Key ' + (apiKeys.length + 1),
           key: data.key,
           createdAt: new Date().toISOString().split('T')[0],
@@ -47,6 +47,7 @@ const ApiKeys: React.FC<ApiKeysProps> = ({ apiKeys, setApiKeys }) => {
           requestCount: 0
         };
         setApiKeys(prev => [...prev, newKey]);
+        // The parent component will handle localStorage persistence
       } else {
         alert('Failed to generate API key');
       }
@@ -58,8 +59,29 @@ const ApiKeys: React.FC<ApiKeysProps> = ({ apiKeys, setApiKeys }) => {
     }
   };
 
-  const removeKey = (id: string) => {
-    setApiKeys(prev => prev.filter(k => k.id !== id));
+  const removeKey = async (id: string) => {
+    const keyToRemove = apiKeys.find(k => k.id === id);
+    if (!keyToRemove) return;
+
+    try {
+      // Call backend to delete the API key
+      const res = await fetch(`${API_BASE}/api/keys/${encodeURIComponent(keyToRemove.key)}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        // Remove from local state only after successful backend deletion
+        setApiKeys(prev => prev.filter(k => k.id !== id));
+        console.log(`API key ${keyToRemove.key} deleted successfully`);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Failed to delete API key from backend:', res.status, errorData);
+        alert(`Failed to delete API key: ${errorData.error || res.statusText}`);
+      }
+    } catch (err) {
+      console.error('Error deleting API key:', err);
+      alert(`Error deleting API key: ${err.message}`);
+    }
   };
 
   return (
