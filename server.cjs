@@ -99,9 +99,9 @@ function loadApiKeys() {
             console.error('Error loading API keys:', e.message);
         }
     }
-    // Always include demo keys
-    apiKeys.add('wa_live_demo_key_123');
-    apiKeys.add('12345678-1234-1234-1234-123456789012');
+    // Always include demo keys (commented out for production)
+    // apiKeys.add('wa_live_demo_key_123');
+    // apiKeys.add('12345678-1234-1234-1234-123456789012');
 }
 
 function saveApiKeys() {
