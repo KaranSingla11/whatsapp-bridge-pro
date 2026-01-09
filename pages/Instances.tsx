@@ -57,7 +57,7 @@ const Instances: React.FC<InstancesProps> = ({ instances, setInstances }) => {
   
   // Instance Details
   const [instanceName, setInstanceName] = useState('');
-  const [bridgeUrl, setBridgeUrl] = useState('http://localhost:3000');
+  const [bridgeUrl, setBridgeUrl] = useState(''); // Will be set to API_BASE dynamically
   const [urlError, setUrlError] = useState<string | null>(null);
   
   // Cloud API Specifics
@@ -152,7 +152,7 @@ const Instances: React.FC<InstancesProps> = ({ instances, setInstances }) => {
 
     if (inspectInstance) {
       const fetchMessages = async () => {
-        const baseUrl = inspectInstance.config?.backendUrl || 'http://localhost:3000';
+        const baseUrl = inspectInstance.config?.backendUrl || API_BASE;
         const cleanUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
         
         try {
@@ -677,7 +677,7 @@ const Instances: React.FC<InstancesProps> = ({ instances, setInstances }) => {
                             type="text" 
                             value={bridgeUrl}
                             onChange={handleBridgeUrlChange}
-                            placeholder="http://localhost:3000"
+                            placeholder={API_BASE || 'http://localhost:3000'}
                             className={`w-full bg-white border rounded-xl px-4 py-3 text-sm font-mono outline-none transition-all ${
                               urlError ? 'border-red-300 ring-4 ring-red-50' : 'border-slate-200 focus:ring-4 focus:ring-green-50 focus:border-green-400'
                             }`}

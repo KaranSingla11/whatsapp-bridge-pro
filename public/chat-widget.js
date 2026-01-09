@@ -18,7 +18,7 @@
     
     const apiKey = params.get('apiKey');
     const instanceId = params.get('instanceId');
-    const apiBaseUrl = params.get('apiUrl') || 'http://localhost:3000';
+    const apiBaseUrl = params.get('apiUrl') || (window.location.protocol + '//' + window.location.host);
 
     console.log('🔑 API Key:', apiKey ? 'Present' : 'Missing');
     console.log('📱 Instance ID:', instanceId ? instanceId : 'Missing');

@@ -303,7 +303,7 @@ const ApiKeys: React.FC<ApiKeysProps> = ({ apiKeys, setApiKeys }) => {
             <p className="text-xs font-bold text-slate-300 uppercase mb-2">Example Request:</p>
             <div className="bg-black/40 p-4 lg:p-6 rounded-xl border border-white/5 overflow-x-auto">
               <pre className="font-mono text-[9px] lg:text-xs text-green-300 leading-relaxed whitespace-pre-wrap break-all">
-<code>{`curl --location 'http://localhost:3000/send/text?access_token=${apiKeys[0]?.key || '12345678-1234-1234-1234-123456789012'}&instance_id=123abc123abc&to=919999999999&message=Hello%20World' \\
+<code>{`curl --location '${API_BASE}/send/text?access_token=${apiKeys[0]?.key || '12345678-1234-1234-1234-123456789012'}&instance_id=123abc123abc&to=919999999999&message=Hello%20World' \\
   --data ''`}</code>
               </pre>
             </div>
@@ -336,7 +336,7 @@ const ApiKeys: React.FC<ApiKeysProps> = ({ apiKeys, setApiKeys }) => {
           
           <div className="bg-black/40 p-4 lg:p-6 rounded-xl border border-white/5 overflow-x-auto">
             <pre className="font-mono text-[10px] lg:text-xs text-blue-300 leading-relaxed">
-<code>{`curl -X POST http://localhost:3000/api/v1/messages/send \\
+<code>{`curl -X POST ${API_BASE}/api/v1/messages/send \\
   -H "Authorization: Bearer ${apiKeys[0]?.key || 'wa_live_demo_key_123'}" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -380,7 +380,7 @@ const ApiKeys: React.FC<ApiKeysProps> = ({ apiKeys, setApiKeys }) => {
                 </div>
                 <div className="flex items-start space-x-3 text-slate-400">
                   <span className="text-emerald-400 font-bold min-w-[120px]">apiUrl</span>
-                  <span className="text-slate-500">(Optional) Your API server URL, defaults to http://localhost:3000</span>
+                  <span className="text-slate-500">(Optional) Your API server URL, defaults to ${API_BASE}</span>
                 </div>
               </div>
             </div>
