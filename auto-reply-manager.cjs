@@ -40,6 +40,7 @@ class AutoReplyManager {
   updateRule(id, updates) {
     const index = this.rules.findIndex(r => r.id === id);
     if (index !== -1) {
+      const oldRule = this.rules[index];
       this.rules[index] = { ...this.rules[index], ...updates };
       this.save();
       return this.rules[index];

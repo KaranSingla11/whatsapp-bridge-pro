@@ -85,29 +85,37 @@ const messageLogs = new Map(); // Store recent messages for each instanceId
 // SSE clients per instanceId
 const sseClients = new Map();
 
-// API Keys persistence
-const KEYS_FILE = './api_keys.json';
-const apiKeys = new Set();
+// Initialize API keys from file or create demo keys
+let apiKeys = new Set();
+const API_KEYS_FILE = './api_keys.json';
 
 function loadApiKeys() {
-    if (fs.existsSync(KEYS_FILE)) {
-        try {
-            const data = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
-            data.forEach(k => apiKeys.add(k));
-            console.log(`Loaded ${data.length} API keys from disk`);
-        } catch (e) {
-            console.error('Error loading API keys:', e.message);
-        }
+  try {
+    if (fs.existsSync(API_KEYS_FILE)) {
+      const data = fs.readFileSync(API_KEYS_FILE, 'utf8');
+      const keys = JSON.parse(data);
+      apiKeys = new Set(keys);
+    } else {
+      // Create initial API keys
+      apiKeys.add('wa_live_demo_key_123');
+      apiKeys.add('wa_bridge_internal_key_fallback_2024'); // Internal fallback key
+      saveApiKeys();
     }
-    // Always include demo keys (commented out for production)
-    // apiKeys.add('wa_live_demo_key_123');
-    // apiKeys.add('12345678-1234-1234-1234-123456789012');
+  } catch (err) {
+    console.error('Error loading API keys:', err);
+    // Always ensure fallback key exists
+    apiKeys.add('wa_bridge_internal_key_fallback_2024');
+  }
 }
 
 function saveApiKeys() {
     try {
-        const keys = Array.from(apiKeys).filter(k => !k.startsWith('wa_live_demo') && !k.includes('1234'));
-        fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2));
+        const keys = Array.from(apiKeys).filter(k => 
+            !k.startsWith('wa_live_demo') && 
+            !k.includes('1234') && 
+            !k.includes('fallback')
+        );
+        fs.writeFileSync(API_KEYS_FILE, JSON.stringify(keys, null, 2));
     } catch (e) {
         console.error('Error saving API keys:', e.message);
     }
@@ -273,15 +281,59 @@ async function createWhatsAppSession(sessionId) {
     });
 
     sock.ev.on('messages.upsert', async m => {
+        console.log(`🔔 messages.upsert event triggered for session ${sessionId}`);
+        
         try {
             const msg = m.messages[0];
+            console.log(`🔔 Processing message:`, msg.key.fromMe ? 'sent by me' : 'received', 'type:', m.type);
+            
             if (!msg.key.fromMe && m.type === 'notify') {
-                const content = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "Media Message";
+                console.log(`🔔 This is a received message, processing...`);
+                
+                // Extract message content from different types
+                let content = '';
+                
+                if (msg.message?.conversation) {
+                    content = msg.message.conversation;
+                } else if (msg.message?.extendedTextMessage?.text) {
+                    content = msg.message.extendedTextMessage.text;
+                } else if (msg.message?.imageMessage?.caption) {
+                    content = msg.message.imageMessage.caption;
+                } else if (msg.message?.videoMessage?.caption) {
+                    content = msg.message.videoMessage.caption;
+                } else if (msg.message?.documentMessage?.caption) {
+                    content = msg.message.documentMessage.caption;
+                } else if (msg.message?.audioMessage) {
+                    content = '[Audio Message]';
+                } else if (msg.message?.voiceMessage) {
+                    content = '[Voice Message]';
+                } else if (msg.message?.stickerMessage) {
+                    content = '[Sticker]';
+                } else if (msg.message?.contactMessage) {
+                    content = '[Contact Message]';
+                } else if (msg.message?.locationMessage) {
+                    content = '[Location Message]';
+                } else if (msg.message?.listMessage) {
+                    content = msg.message.listMessage.description || '[List Message]';
+                } else if (msg.message?.buttonsResponseMessage) {
+                    content = msg.message.buttonsResponseMessage.selectedDisplayText || '[Button Response]';
+                } else if (msg.message?.templateButtonReplyMessage) {
+                    content = msg.message.templateButtonReplyMessage.selectedDisplayText || '[Template Response]';
+                } else {
+                    content = '[Media Message]';
+                }
+                
                 const from = msg.key.remoteJid;
+                console.log(`📨 Received message for session ${sessionId}: "${content}" from ${from}`);
+                
+                // Check if this session has corresponding instance
+                const instance = instances.get(sessionId);
+                
                 logMessage(sessionId, 'received', from, content);
 
                 // Check for auto-reply rules
                 try {
+
                     const rules = autoReplyManager.getByInstance(sessionId);
                     for (const rule of rules) {
                         // Check if from number matches (if specified)
@@ -295,6 +347,7 @@ async function createWhatsAppSession(sessionId) {
                             await sock.sendMessage(from, { text: rule.replyMessage });
                             console.log(`✅ Auto-reply sent to ${from}`);
                             break; // Only send one auto-reply per message
+                        } else {
                         }
                     }
                 } catch (err) {
@@ -322,7 +375,13 @@ app.get('/instances', (req, res) => {
 
 // API Keys endpoint - get all keys
 app.get('/api/keys', (req, res) => {
-    res.json({ keys: Array.from(apiKeys) });
+    // Filter out internal fallback and demo keys from frontend response
+    const frontendKeys = Array.from(apiKeys).filter(k => 
+        !k.includes('fallback') && 
+        !k.startsWith('wa_live_demo') && 
+        !k.includes('1234')
+    );
+    res.json({ keys: frontendKeys });
 });
 
 // API Keys endpoint - generate new key
@@ -403,16 +462,18 @@ app.delete('/instances/:id', async (req, res) => {
             });
         }
         sseClients.delete(id);
+
+         // Clean up auto-reply rules for this instance
+        // try {
+        //     const rules = autoReplyManager.getByInstance(id);
+        //     for (const rule of rules) {
+        //         autoReplyManager.deleteRule(rule.id);
+        //     }
+        // } catch (e) {
+        //     console.error(`Error cleaning up auto-replies for ${id}:`, e.message);
+        // }
         
-        // Clean up auto-reply rules for this instance
-        try {
-            const rules = autoReplyManager.getByInstance(id);
-            for (const rule of rules) {
-                autoReplyManager.deleteRule(rule.id);
-            }
-        } catch (e) {
-            console.error(`Error cleaning up auto-replies for ${id}:`, e.message);
-        }
+        console.log(`📝 Instance ${id} deleted. Auto-reply rules preserved for reassignment.`);
         
         res.json({ success: true, message: `Instance ${id} deleted` });
     } catch (error) {
@@ -552,8 +613,9 @@ app.post('/api/v1/messages/send', async (req, res) => {
     const { instanceId, to, message, type, config } = req.body; 
 
     try {
+        // Accept both user-generated API keys and internal fallback key
         if (!apiKeys.has(apiKey)) {
-            return res.status(401).json({ error: 'Invalid Internal API Key' });
+            return res.status(401).json({ error: 'Invalid API Key' });
         }
 
         if (type === 'web_bridge') {
@@ -717,6 +779,7 @@ app.put('/auto-reply/:id', (req, res) => {
         if (!rule) return res.status(404).json({ error: 'Rule not found' });
         res.json({ success: true, rule });
     } catch (err) {
+        console.error('❌ Error updating auto-reply rule:', err);
         res.status(400).json({ error: err.message });
     }
 });

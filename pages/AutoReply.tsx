@@ -85,8 +85,8 @@ export default function AutoReply() {
   };
 
   const handleSaveRule = async () => {
-    if (!formData.instanceId || !formData.triggerMessage || !formData.replyMessage) {
-      alert('Please fill in all required fields');
+    if (!formData.triggerMessage || !formData.replyMessage) {
+      alert('Please fill in trigger message and reply message');
       return;
     }
 
@@ -190,6 +190,20 @@ export default function AutoReply() {
                 <tr key={rule.id} className="border-b hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm">
                     {instances.find(i => i.id === rule.instanceId)?.phoneNumber || rule.instanceId}
+                    
+                    {/* {(() => {
+                      const instance = instances.find(i => i.id === rule.instanceId);
+                      if (instance) {
+                        return instance.phoneNumber || rule.instanceId;
+                      } else {
+                        return (
+                          <div>
+                            <div className="text-red-600">{rule.instanceId}</div>
+                            <div className="text-xs text-gray-500">(Instance deleted)</div>
+                          </div>
+                        );
+                      }
+                    })()} */}
                   </td>
                   <td className="px-6 py-4 text-sm">{rule.fromNumber || 'All'}</td>
                   <td className="px-6 py-4 text-sm max-w-xs truncate">{rule.triggerMessage}</td>
@@ -246,7 +260,7 @@ export default function AutoReply() {
               {/* Instance */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Instance *
+                  Instance (Optional)
                 </label>
                 <select
                   value={formData.instanceId}
@@ -259,6 +273,11 @@ export default function AutoReply() {
                       {inst.phoneNumber || inst.id}
                     </option>
                   ))}
+                  {editingId && !instances.find(i => i.id === formData.instanceId) && (
+                    <option value={formData.instanceId} disabled>
+                      {formData.instanceId} (Deleted Instance)
+                    </option>
+                  )}
                 </select>
               </div>
 

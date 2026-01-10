@@ -24,6 +24,7 @@ import SettingsPage from './pages/Settings';
 import ProfilePage from './pages/Profile';
 import Login from './pages/Login';
 import { WhatsAppInstance, ApiKey } from './types';
+import { API_BASE } from './config';
 
 /**
  * Root Layout & Navigation Hub
@@ -38,8 +39,74 @@ const App: React.FC = () => {
 
   // App-wide state - In true Next.js, this might use a Context Provider or State Store
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
-
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+
+  // Fetch instances from backend
+  const fetchInstances = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/instances`);
+      if (res.ok) {
+        const data = await res.json();
+        setInstances(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch instances:', err);
+    }
+  };
+
+  // Fetch API keys from backend
+  const fetchApiKeys = async (retryCount = 0) => {
+    try {
+      // First try to load from localStorage as backup
+      const storedKeys = localStorage.getItem('apiKeys');
+      if (storedKeys) {
+        try {
+          const parsedKeys = JSON.parse(storedKeys);
+          setApiKeys(parsedKeys);
+          console.log('📱 Loaded API keys from localStorage backup:', parsedKeys.length);
+        } catch (e) {
+          console.error('Error parsing stored API keys:', e);
+        }
+      }
+
+      // Then fetch from backend using dynamic API_BASE
+      console.log('🔄 Fetching API keys from backend:', API_BASE);
+      const res = await fetch(`${API_BASE}/api/keys`);
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log('✅ Backend API keys response:', data);
+        
+        const backendKeys = data.keys.map((key: string, index: number) => ({
+          id: `key_${key.replace(/[^a-zA-Z0-9]/g, '_')}`, // Use the actual key to create a stable ID
+          name: `Integration Key ${index + 1}`,
+          key: key,
+          createdAt: new Date().toISOString().split('T')[0],
+          lastUsed: null,
+          status: 'active' as const,
+          requestCount: 0
+        }));
+        setApiKeys(backendKeys);
+        // Save to localStorage as backup
+        localStorage.setItem('apiKeys', JSON.stringify(backendKeys));
+        console.log('💾 Saved API keys to localStorage:', backendKeys.length);
+      } else {
+        console.error('❌ Backend API keys fetch failed:', res.status, res.statusText);
+        // Retry logic for Render deployment (backend might be starting up)
+        if (retryCount < 3 && res.status >= 500) {
+          console.log(`🔄 Retrying API keys fetch (${retryCount + 1}/3)...`);
+          setTimeout(() => fetchApiKeys(retryCount + 1), 2000 * (retryCount + 1));
+        }
+      }
+    } catch (err) {
+      console.error('❌ Failed to fetch API keys:', err);
+      // If backend fetch fails, keep using localStorage data if available
+      if (retryCount < 3) {
+        console.log(`🔄 Retrying API keys fetch due to error (${retryCount + 1}/3)...`);
+        setTimeout(() => fetchApiKeys(retryCount + 1), 2000 * (retryCount + 1));
+      }
+    }
+  };
 
   // Check if user is already logged in on mount
   useEffect(() => {
@@ -55,56 +122,6 @@ const App: React.FC = () => {
     }
     setIsLoading(false);
   }, []);
-
-  // Fetch instances from backend
-  const fetchInstances = async () => {
-    try {
-      const res = await fetch('http://localhost:3000/instances');
-      if (res.ok) {
-        const data = await res.json();
-        setInstances(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch instances:', err);
-    }
-  };
-
-  // Fetch API keys from backend
-  const fetchApiKeys = async () => {
-    try {
-      // First try to load from localStorage as backup
-      const storedKeys = localStorage.getItem('apiKeys');
-      if (storedKeys) {
-        try {
-          const parsedKeys = JSON.parse(storedKeys);
-          setApiKeys(parsedKeys);
-        } catch (e) {
-          console.error('Error parsing stored API keys:', e);
-        }
-      }
-
-      // Then fetch from backend
-      const res = await fetch('http://localhost:3000/api/keys');
-      if (res.ok) {
-        const data = await res.json();
-        const backendKeys = data.keys.map((key: string, index: number) => ({
-          id: `key_${key.replace(/[^a-zA-Z0-9]/g, '_')}`, // Use the actual key to create a stable ID
-          name: `Integration Key ${index + 1}`,
-          key: key,
-          createdAt: new Date().toISOString().split('T')[0],
-          lastUsed: null,
-          status: 'active' as const,
-          requestCount: 0
-        }));
-        setApiKeys(backendKeys);
-        // Save to localStorage as backup
-        localStorage.setItem('apiKeys', JSON.stringify(backendKeys));
-      }
-    } catch (err) {
-      console.error('Failed to fetch API keys:', err);
-      // If backend fetch fails, keep using localStorage data if available
-    }
-  };
 
   // Handle route changes
   useEffect(() => {

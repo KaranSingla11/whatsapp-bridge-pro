@@ -115,6 +115,16 @@ const Chat: React.FC<ChatProps> = ({ instances }) => {
     setIsSending(true);
 
     try {
+      // Get API key from backend
+      const keysRes = await fetch(`${API_BASE}/api/keys`);
+      const keysData = await keysRes.json();
+      let apiKey = keysData.keys[0]; // Use first available API key
+      
+      // Fallback to a built-in key if no API keys exist
+      if (!apiKey) {
+        apiKey = 'wa_bridge_internal_key_fallback_2024';
+      }
+
       // Send message via backend API
       const url = `${API_BASE}/api/v1/messages/send`;
       console.log('Sending message to:', url, { instanceId: selectedInstance.id, to: phoneNumber, message: message });
@@ -123,7 +133,7 @@ const Chat: React.FC<ChatProps> = ({ instances }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer wa_live_demo_key_123'
+          'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           instanceId: selectedInstance.id,

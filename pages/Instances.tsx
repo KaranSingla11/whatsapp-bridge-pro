@@ -57,7 +57,7 @@ const Instances: React.FC<InstancesProps> = ({ instances, setInstances }) => {
   
   // Instance Details
   const [instanceName, setInstanceName] = useState('');
-  const [bridgeUrl, setBridgeUrl] = useState(''); // Will be set to API_BASE dynamically
+  const [bridgeUrl, setBridgeUrl] = useState('http://localhost:3000'); // Default, will be updated dynamically
   const [urlError, setUrlError] = useState<string | null>(null);
   
   // Cloud API Specifics
@@ -106,6 +106,7 @@ const Instances: React.FC<InstancesProps> = ({ instances, setInstances }) => {
       setQrString(`WASM_SIM_DATA_${Date.now()}`);
       setError(null);
       setCountdown(30);
+      setScanStep(1);
       return;
     }
     if (!instanceName) {
@@ -694,7 +695,7 @@ const Instances: React.FC<InstancesProps> = ({ instances, setInstances }) => {
                   )}
 
                   <button 
-                    onClick={() => setScanStep(1)}
+                    onClick={fetchQrCode}
                     disabled={isProceedDisabled()}
                     className={`w-full py-4 lg:py-5 rounded-xl lg:rounded-2xl font-black shadow-xl transition-all flex items-center justify-center space-x-2 ${
                       isProceedDisabled() 
